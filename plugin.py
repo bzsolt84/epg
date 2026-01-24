@@ -40,7 +40,8 @@ class ListManager(Screen):
         self['actions'] = ActionMap(['OkCancelActions', 'ColorActions'], {
             'cancel': self.Exit,
             'green': self.Green,
-            'yellow': self.Yellow
+            'yellow': self.Yellow,
+            'blue': self.Blue
         }, -1)
         self.onLayoutFinish.append(self.layoutFinished)
 
@@ -70,6 +71,8 @@ class ListManager(Screen):
             self.Timer.callback.append(self.prepare_settings)
         elif marker == '3':
             self.Timer.callback.append(self.app_update)
+        elif marker == '4':
+            self.Timer.callback.append(self.prepare_settings_alt)            
         self.Timer.start(100, True)
 
     def Green(self):
@@ -81,6 +84,23 @@ class ListManager(Screen):
         global marker
         marker = '3'
         self.start()
+        
+    def Blue(self):
+        global marker
+        marker = '4'
+        self.start()
+
+    def prepare_settings_alt(self):
+        self.StatRefresh(_('Alternatív lista letöltése...'))
+        # Itt csatlist2.zip-et töltünk le
+        os.system('wget --no-check-certificate -q -T 10 -P /tmp https://raw.githubusercontent.com/bzsolt84/epg/main/csatlist2.zip')
+        if os.path.exists('/tmp/csatlist2.zip'):
+            # Átnevezzük az átláthatóság kedvéért a kicsomagoláshoz
+            os.system('mv /tmp/csatlist2.zip /tmp/csatlist.zip')
+            os.system('mkdir -p /tmp/csatlist/ && unzip -o /tmp/csatlist.zip -d /tmp/csatlist/')
+            self.installing_settings()
+        else:
+            self.StatRefresh(_('HIBA!\nAlternatív lista nem található!'))
 
     def app_update(self):
         self.StatRefresh(_('Plugin frissítése...\nKérlek várj...'))
