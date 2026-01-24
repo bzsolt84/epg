@@ -17,7 +17,7 @@ from string import Template
 import gettext
 from Components.config import config
 
-pluginVersion = '2.6.1.13'
+pluginVersion = '2.6.1.14'
 pluginPath = resolveFilename(SCOPE_PLUGINS, 'Extensions/eXistenZUpdater')
 
 try:
@@ -27,7 +27,7 @@ except:
     _ = lambda str: str
 
 class ListManager(Screen):
-    skin = Template('\n\t<screen position="center,center" size="600,125" title="Csatorna lista letöltés v${version}" > \n\n\t\t<widget name="id_cur" position="0,25" size="600,30" halign="center" font="Regular;20" />\n\n\t\t<widget name="id_new" position="0,50" size="600,30" halign="center" font="Regular;20" />\n\t\t<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/buttons/green.png" position="80,100" size="90,40" alphatest="on" />\n\t\t<widget name="key_green" position="110,92" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" backgroundColor="transpBlack" transparent="1" />\n\t\t<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/buttons/yellow.png" position="320,100" size="90,40" alphatest="on" />\n\t\t<widget name="key_yellow" position="350,92" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" backgroundColor="transpBlack" transparent="1" />\n\t</screen>').substitute(plugin=pluginPath, version=pluginVersion)
+    skin = Template('\n\t<screen position="center,center" size="600,125" title="Csatornalista Frissítő v${version}" > \n\n\t\t<widget name="id_cur" position="0,25" size="600,30" halign="center" font="Regular;20" />\n\n\t\t<widget name="id_new" position="0,50" size="600,30" halign="center" font="Regular;20" />\n\t\t<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/buttons/green.png" position="80,100" size="90,40" alphatest="on" />\n\t\t<widget name="key_green" position="110,92" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" backgroundColor="transpBlack" transparent="1" />\n\t\t<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/buttons/yellow.png" position="320,100" size="90,40" alphatest="on" />\n\t\t<widget name="key_yellow" position="350,92" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" backgroundColor="transpBlack" transparent="1" />\n\t</screen>').substitute(plugin=pluginPath, version=pluginVersion)
 
     def __init__(self, session):
         self.service = None
@@ -176,9 +176,9 @@ def main(session, **kwargs):
     session.open(ListManager)
 
 def Plugins(**kwargs):
-    desc = 'Csatorna lista frissítés v' + pluginVersion
+    desc = 'Csatornalista Frissítő v' + pluginVersion
     return [PluginDescriptor(
-        name='eXistenZ Lista Frissítő', 
+        name='Csatornalista Frissítő', 
         description=desc, 
         where=PluginDescriptor.WHERE_PLUGINMENU, 
         icon='plugin.png', 
