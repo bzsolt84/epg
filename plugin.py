@@ -17,7 +17,7 @@ from string import Template
 import gettext
 from Components.config import config
 
-pluginVersion = '2.6.1.10'
+pluginVersion = '2.6.1.11'
 pluginPath = resolveFilename(SCOPE_PLUGINS, 'Extensions/eXistenZUpdater')
 
 try:
@@ -58,8 +58,9 @@ class ListManager(Screen):
             self['id_new'].setText(_('Legfrissebb verzió: nem elérhető'))
             
         if os.path.exists('/etc/enigma2/revision'):
-            cs_d = subprocess.getoutput('. /etc/enigma2/revision >/dev/null 2>&1 && echo $DATE').strip()
-            self['id_cur'].setText(_('Telepített: ') + cs_d)
+            cur_d = subprocess.getoutput('. /etc/enigma2/revision >/dev/null 2>&1 && echo $DATE').strip()
+            cur_v = subprocess.getoutput('. /etc/enigma2/revision >/dev/null 2>&1 && echo $VER').strip()
+            self['id_cur'].setText(_('Telepített: ') + cur_d + " (" + cur_v + ")")
 
     def start(self):
         self.StatRefresh(_('Folyamat indítása...'))
