@@ -17,7 +17,7 @@ from string import Template
 import gettext
 from Components.config import config
 
-pluginVersion = '2.6.1.11'
+pluginVersion = '2.6.1.13'
 pluginPath = resolveFilename(SCOPE_PLUGINS, 'Extensions/eXistenZUpdater')
 
 try:
@@ -27,7 +27,6 @@ except:
     _ = lambda str: str
 
 class ListManager(Screen):
-    # Frissített skin sárga gombbal, kék nélkül
     skin = Template('\n\t<screen position="center,center" size="600,125" title="Csatorna lista letöltés v${version}" > \n\n\t\t<widget name="id_cur" position="0,25" size="600,30" halign="center" font="Regular;20" />\n\n\t\t<widget name="id_new" position="0,50" size="600,30" halign="center" font="Regular;20" />\n\t\t<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/buttons/green.png" position="80,100" size="90,40" alphatest="on" />\n\t\t<widget name="key_green" position="110,92" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" backgroundColor="transpBlack" transparent="1" />\n\t\t<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/buttons/yellow.png" position="320,100" size="90,40" alphatest="on" />\n\t\t<widget name="key_yellow" position="350,92" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" backgroundColor="transpBlack" transparent="1" />\n\t</screen>').substitute(plugin=pluginPath, version=pluginVersion)
 
     def __init__(self, session):
@@ -48,7 +47,6 @@ class ListManager(Screen):
     def layoutFinished(self):
         os.system('rm -f /tmp/revision')
         import subprocess
-        # Ping és letöltés SSL hiba nélkül
         os.system('wget --no-check-certificate -q -T 3 -P /tmp https://raw.githubusercontent.com/bzsolt84/epg/main/revision')
             
         if os.path.exists('/tmp/revision'):
@@ -178,4 +176,11 @@ def main(session, **kwargs):
     session.open(ListManager)
 
 def Plugins(**kwargs):
-    return [PluginDescriptor(name='Csatorna lista frissítés', description='v2.6.2.0', where=PluginDescriptor.WHERE_PLUGINMENU, icon='plugin.png', fnc=main)]
+    desc = 'Csatorna lista frissítés v' + pluginVersion
+    return [PluginDescriptor(
+        name='eXistenZ Lista Frissítő', 
+        description=desc, 
+        where=PluginDescriptor.WHERE_PLUGINMENU, 
+        icon='plugin.png', 
+        fnc=main
+    )]
