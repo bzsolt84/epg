@@ -20,7 +20,7 @@ if sys.version_info[0] < 3:
 else:
     import urllib.request as urllib
 
-pluginVersion = '2.6.2.16'
+pluginVersion = '2.6.1.22'
 pluginPath = resolveFilename(SCOPE_PLUGINS, 'Extensions/eXistenZUpdater')
 marker = '0'
 
@@ -31,30 +31,28 @@ def decode_str(txt):
     except: return str(txt)
 
 def download_internal(url, target):
-    """Belső letöltő, ami megkerüli a wget-et"""
     try:
-        # SSL ellenőrzés kikapcsolása (régi boxokon életmentő)
         ctx = ssl._create_unverified_context()
         req = urllib.urlopen(url, context=ctx, timeout=15)
         with open(target, 'wb') as f:
             f.write(req.read())
         return True
-    except Exception as e:
-        # Ha a belső letöltés is elszáll, utolsó esélyként a wget-et hívjuk
+    except:
         res = os.system('wget --no-check-certificate -q "%s" -O %s' % (url, target))
         return res == 0 and os.path.exists(target) and os.path.getsize(target) > 0
 
 class ListManager(Screen):
+    # Kék gomb elrejtve a skinből, de a logikában benne marad
     skin = Template("""
     <screen position="center,center" size="600,150" title="Csatornalista Frissítő v${version}" > 
         <widget name="id_cur" position="0,20" size="600,30" halign="center" font="Regular;20" />
         <widget name="id_new" position="0,55" size="600,30" halign="center" font="Regular;20" />
         
-        <ePixmap pixmap="${plugin}/buttons/green.png" position="80,110" size="90,40" alphatest="on" />
-        <widget name="key_green" position="115,102" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" transparent="1" foregroundColor="#ffffff" />
+        <ePixmap pixmap="${plugin}/buttons/green.png" position="80,110" size="30,30" alphatest="on" />
+        <widget name="key_green" position="120,110" zPosition="1" size="150,30" font="Regular;20" halign="left" transparent="1" />
         
-        <ePixmap pixmap="${plugin}/buttons/yellow.png" position="320,110" size="90,40" alphatest="on" />
-        <widget name="key_yellow" position="355,102" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" transparent="1" foregroundColor="#ffffff" />
+        <ePixmap pixmap="${plugin}/buttons/yellow.png" position="320,110" size="30,30" alphatest="on" />
+        <widget name="key_yellow" position="360,110" zPosition="1" size="150,30" font="Regular;20" halign="left" transparent="1" />
     </screen>""").substitute(plugin=pluginPath, version=pluginVersion)
 
     def __init__(self, session):
@@ -66,14 +64,13 @@ class ListManager(Screen):
         self['actions'] = ActionMap(['OkCancelActions', 'ColorActions'], {
             'cancel': self.Exit,
             'green': self.Green,
-            'yellow': self.Yellow
+            'yellow': self.Yellow,
+            'blue': self.Blue # A gomb funkciója megmarad
         }, -1)
         
         self.initTimer = eTimer()
-        try:
-            self.initTimer_conn = self.initTimer.timeout.connect(self.layoutFinished)
-        except:
-            self.initTimer.callback.append(self.layoutFinished)
+        try: self.initTimer_conn = self.initTimer.timeout.connect(self.layoutFinished)
+        except: self.initTimer.callback.append(self.layoutFinished)
         self.initTimer.start(1000, True)
 
     def layoutFinished(self):
@@ -111,22 +108,34 @@ class ListManager(Screen):
         global marker
         marker = '3'
         self.start_work()
+        
+    def Blue(self):
+        global marker
+        marker = '4'
+        self.start_work()
 
     def start_work(self):
         self.session.open(InstallWin)
         self.WorkTimer = eTimer()
-        f = self.prepare_settings if marker == '2' else self.app_update
+        f = self.prepare_settings
+        if marker == '3': f = self.app_update
         try: self.WorkTimer_conn = self.WorkTimer.timeout.connect(f)
         except: self.WorkTimer.callback.append(f)
         self.WorkTimer.start(1000, True)
 
     def prepare_settings(self):
+        global marker
         self.StatRefresh('Lista letöltése...')
-        if download_internal('https://raw.githubusercontent.com/bzsolt84/epg/main/csatlist.zip', '/tmp/csatlist.zip'):
+        url = 'https://raw.githubusercontent.com/bzsolt84/epg/main/csatlist.zip'
+        if marker == '4':
+            url = 'https://raw.githubusercontent.com/bzsolt84/epg/main/csatlist2.zip'
+            self.StatRefresh('Alternatív lista...')
+        
+        if download_internal(url, '/tmp/csatlist.zip'):
             self.StatRefresh('Kicsomagolás...')
             os.system('rm -rf /tmp/csatlist && mkdir -p /tmp/csatlist/ && unzip -o /tmp/csatlist.zip -d /tmp/csatlist/')
             self.installing_settings()
-        else: self.StatRefresh('HIBA!\nPython SSL hiba a letöltéskor!')
+        else: self.StatRefresh('HIBA!\nLetöltési hiba!')
 
     def app_update(self):
         self.StatRefresh('Plugin frissítése...')
