@@ -1,186 +1,185 @@
-# Embedded file name: /usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/plugin.py
+# -*- coding: utf-8 -*-
 from Plugins.Plugin import PluginDescriptor
-from enigma import *
-from Screens.Standby import *
-from Screens.MessageBox import MessageBox
-from Components.ActionMap import ActionMap
+import os
+import sys
+import gettext
+import ssl
+
+# Enigma2 importok
+from enigma import eDVBDB, eTimer
 from Screens.Screen import Screen
 from Components.Label import Label
-from Components.Pixmap import Pixmap
-from Components.Console import Console
-import ServiceReference
-import os
-from time import sleep
-from Components.Language import language
-from Tools.Directories import resolveFilename, SCOPE_PLUGINS, SCOPE_LANGUAGE
-from string import Template
-import gettext
+from Components.ActionMap import ActionMap
 from Components.config import config
+from Tools.Directories import resolveFilename, SCOPE_PLUGINS
+from string import Template
 
-pluginVersion = '2.6.1.14'
+# Python 2/3 hibrid hálózati import
+if sys.version_info[0] < 3:
+    import urllib2 as urllib
+else:
+    import urllib.request as urllib
+
+pluginVersion = '2.6.2.16'
 pluginPath = resolveFilename(SCOPE_PLUGINS, 'Extensions/eXistenZUpdater')
+marker = '0'
 
-try:
-    cat = gettext.translation('lang', pluginPath + '/po', [config.osd.language.getText()])
-    _ = cat.gettext
-except:
-    _ = lambda str: str
+def decode_str(txt):
+    if sys.version_info[0] >= 3:
+        return txt.decode('utf-8') if isinstance(txt, bytes) else txt
+    try: return txt.encode('utf-8') if isinstance(txt, unicode) else str(txt)
+    except: return str(txt)
+
+def download_internal(url, target):
+    """Belső letöltő, ami megkerüli a wget-et"""
+    try:
+        # SSL ellenőrzés kikapcsolása (régi boxokon életmentő)
+        ctx = ssl._create_unverified_context()
+        req = urllib.urlopen(url, context=ctx, timeout=15)
+        with open(target, 'wb') as f:
+            f.write(req.read())
+        return True
+    except Exception as e:
+        # Ha a belső letöltés is elszáll, utolsó esélyként a wget-et hívjuk
+        res = os.system('wget --no-check-certificate -q "%s" -O %s' % (url, target))
+        return res == 0 and os.path.exists(target) and os.path.getsize(target) > 0
 
 class ListManager(Screen):
-    skin = Template('\n\t<screen position="center,center" size="600,125" title="Csatornalista Frissítő v${version}" > \n\n\t\t<widget name="id_cur" position="0,25" size="600,30" halign="center" font="Regular;20" />\n\n\t\t<widget name="id_new" position="0,50" size="600,30" halign="center" font="Regular;20" />\n\t\t<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/buttons/green.png" position="80,100" size="90,40" alphatest="on" />\n\t\t<widget name="key_green" position="110,92" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" backgroundColor="transpBlack" transparent="1" />\n\t\t<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/buttons/yellow.png" position="320,100" size="90,40" alphatest="on" />\n\t\t<widget name="key_yellow" position="350,92" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" backgroundColor="transpBlack" transparent="1" />\n\t</screen>').substitute(plugin=pluginPath, version=pluginVersion)
+    skin = Template("""
+    <screen position="center,center" size="600,150" title="Csatornalista Frissítő v${version}" > 
+        <widget name="id_cur" position="0,20" size="600,30" halign="center" font="Regular;20" />
+        <widget name="id_new" position="0,55" size="600,30" halign="center" font="Regular;20" />
+        
+        <ePixmap pixmap="${plugin}/buttons/green.png" position="80,110" size="90,40" alphatest="on" />
+        <widget name="key_green" position="115,102" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" transparent="1" foregroundColor="#ffffff" />
+        
+        <ePixmap pixmap="${plugin}/buttons/yellow.png" position="320,110" size="90,40" alphatest="on" />
+        <widget name="key_yellow" position="355,102" zPosition="1" size="150,40" font="Regular;20" halign="left" valign="center" transparent="1" foregroundColor="#ffffff" />
+    </screen>""").substitute(plugin=pluginPath, version=pluginVersion)
 
     def __init__(self, session):
-        self.service = None
         Screen.__init__(self, session)
-        self['key_green'] = Label(_('Letöltés'))
-        self['key_yellow'] = Label(_('App frissítés'))
-        self['id_cur'] = Label(_('Telepített verzió: N/A'))
-        self['id_new'] = Label(_('Legfrissebb verzió: N/A'))
+        self['key_green'] = Label('Letöltés')
+        self['key_yellow'] = Label('App frissítés')
+        self['id_cur'] = Label('Telepített: ...')
+        self['id_new'] = Label('Legfrissebb: ...')
         self['actions'] = ActionMap(['OkCancelActions', 'ColorActions'], {
             'cancel': self.Exit,
             'green': self.Green,
-            'yellow': self.Yellow,
-            'blue': self.Blue
+            'yellow': self.Yellow
         }, -1)
-        self.onLayoutFinish.append(self.layoutFinished)
+        
+        self.initTimer = eTimer()
+        try:
+            self.initTimer_conn = self.initTimer.timeout.connect(self.layoutFinished)
+        except:
+            self.initTimer.callback.append(self.layoutFinished)
+        self.initTimer.start(1000, True)
 
     def layoutFinished(self):
-        os.system('rm -f /tmp/revision')
-        import subprocess
-        os.system('wget --no-check-certificate -q -T 3 -P /tmp https://raw.githubusercontent.com/bzsolt84/epg/main/revision')
-            
-        if os.path.exists('/tmp/revision'):
-            new_v = subprocess.getoutput('. /tmp/revision && echo $VER').strip()
-            new_d = subprocess.getoutput('. /tmp/revision && echo $DATE').strip()
-            self['id_new'].setText(_('Legfrissebb: ') + new_d + " (" + new_v + ")")
-        else:
-            self['id_new'].setText(_('Legfrissebb verzió: nem elérhető'))
-            
+        url = 'https://raw.githubusercontent.com/bzsolt84/epg/main/revision'
+        target = '/tmp/revision'
+        if download_internal(url, target):
+            try:
+                with open(target, 'r') as f:
+                    content = f.read().splitlines()
+                    v, d = "N/A", "N/A"
+                    for line in content:
+                        if 'VER=' in line: v = line.split('=')[1].replace('"', '')
+                        if 'DATE=' in line: d = line.split('=')[1].replace('"', '')
+                self['id_new'].setText('Legfrissebb: ' + d + " (" + v + ")")
+            except: self['id_new'].setText('Legfrissebb: Beolvasási hiba')
+        else: self['id_new'].setText('Legfrissebb: GitHub elérés hiba')
+        
         if os.path.exists('/etc/enigma2/revision'):
-            cur_d = subprocess.getoutput('. /etc/enigma2/revision >/dev/null 2>&1 && echo $DATE').strip()
-            cur_v = subprocess.getoutput('. /etc/enigma2/revision >/dev/null 2>&1 && echo $VER').strip()
-            self['id_cur'].setText(_('Telepített: ') + cur_d + " (" + cur_v + ")")
-
-    def start(self):
-        self.StatRefresh(_('Folyamat indítása...'))
-        self.session.open(InstallWin)
-        self.Timer = eTimer()
-        if marker == '2':
-            self.Timer.callback.append(self.prepare_settings)
-        elif marker == '3':
-            self.Timer.callback.append(self.app_update)
-        elif marker == '4':
-            self.Timer.callback.append(self.prepare_settings_alt)            
-        self.Timer.start(100, True)
+            try:
+                with open('/etc/enigma2/revision', 'r') as f:
+                    content = f.read().splitlines()
+                    cv, cd = "N/A", "N/A"
+                    for line in content:
+                        if 'VER=' in line: cv = line.split('=')[1].replace('"', '')
+                        if 'DATE=' in line: cd = line.split('=')[1].replace('"', '')
+                self['id_cur'].setText('Telepített: ' + cd + " (" + cv + ")")
+            except: pass
 
     def Green(self):
         global marker
         marker = '2'
-        self.start()
+        self.start_work()
 
     def Yellow(self):
         global marker
         marker = '3'
-        self.start()
-        
-    def Blue(self):
-        global marker
-        marker = '4'
-        self.start()
+        self.start_work()
 
-    def prepare_settings_alt(self):
-        self.StatRefresh(_('Alternatív lista letöltése...'))
-        # Itt csatlist2.zip-et töltünk le
-        os.system('wget --no-check-certificate -q -T 10 -P /tmp https://raw.githubusercontent.com/bzsolt84/epg/main/csatlist2.zip')
-        if os.path.exists('/tmp/csatlist2.zip'):
-            # Átnevezzük az átláthatóság kedvéért a kicsomagoláshoz
-            os.system('mv /tmp/csatlist2.zip /tmp/csatlist.zip')
-            os.system('mkdir -p /tmp/csatlist/ && unzip -o /tmp/csatlist.zip -d /tmp/csatlist/')
-            self.installing_settings()
-        else:
-            self.StatRefresh(_('HIBA!\nAlternatív lista nem található!'))
-
-    def app_update(self):
-        self.StatRefresh(_('Plugin frissítése...\nKérlek várj...'))
-        cmd = "wget --no-check-certificate -q -O /usr/lib/enigma2/python/Plugins/Extensions/eXistenZUpdater/plugin.py https://raw.githubusercontent.com/bzsolt84/epg/main/plugin.py"
-        os.system(cmd)
-        os.system("sync")
-        self.StatRefresh(_('Frissítés KÉSZ!\nIndítsd újra a GUI-t!'))
+    def start_work(self):
+        self.session.open(InstallWin)
+        self.WorkTimer = eTimer()
+        f = self.prepare_settings if marker == '2' else self.app_update
+        try: self.WorkTimer_conn = self.WorkTimer.timeout.connect(f)
+        except: self.WorkTimer.callback.append(f)
+        self.WorkTimer.start(1000, True)
 
     def prepare_settings(self):
-        self.StatRefresh(_('Lista letöltése...'))
-        os.system('wget --no-check-certificate -q -T 10 -P /tmp https://raw.githubusercontent.com/bzsolt84/epg/main/csatlist.zip')
-        if os.path.exists('/tmp/csatlist.zip'):
-            os.system('mkdir -p /tmp/csatlist/ && unzip -o /tmp/csatlist.zip -d /tmp/csatlist/')
+        self.StatRefresh('Lista letöltése...')
+        if download_internal('https://raw.githubusercontent.com/bzsolt84/epg/main/csatlist.zip', '/tmp/csatlist.zip'):
+            self.StatRefresh('Kicsomagolás...')
+            os.system('rm -rf /tmp/csatlist && mkdir -p /tmp/csatlist/ && unzip -o /tmp/csatlist.zip -d /tmp/csatlist/')
             self.installing_settings()
-        else:
-            self.StatRefresh(_('HIBA!\nLetöltés sikertelen!'))
+        else: self.StatRefresh('HIBA!\nPython SSL hiba a letöltéskor!')
+
+    def app_update(self):
+        self.StatRefresh('Plugin frissítése...')
+        if download_internal('https://raw.githubusercontent.com/bzsolt84/epg/main/plugin.py', pluginPath + '/plugin.py'):
+            os.system("sync")
+            self.StatRefresh('KÉSZ!\nRestart GUI!')
+        else: self.StatRefresh('HIBA!\nFrissítés sikertelen!')
 
     def installing_settings(self):
-        self.StatRefresh(_('Fájlok másolása...'))
+        self.StatRefresh('Másolás...')
         os.system('rm -f /etc/enigma2/userbouquet* /etc/enigma2/bouquets*')
         os.system('cp -rf /tmp/csatlist/* /etc/enigma2/')
         if os.path.exists('/etc/enigma2/satellites.xml'):
             os.system('mv -f /etc/enigma2/satellites.xml /etc/tuxbox/satellites.xml')
-        
         try:
-            from enigma import eDVBDB
             eDVBDB.getInstance().reloadServicelist()
             eDVBDB.getInstance().reloadBouquets()
-        except:
-            os.system('wget -qO - http://127.0.0.1/web/servicelistreload?mode=0 > /dev/null 2>&1 &')
-        
-        self.cleaning_tmp()
-
-    def cleaning_tmp(self):
+        except: os.system('wget -qO - http://127.0.0.1/web/servicelistreload?mode=0 > /dev/null 2>&1 &')
         os.system('rm -rf /tmp/revision /tmp/csatlist*')
-        os.system('sync')
-        self.StatRefresh(_('Frissítés KÉSZ!\nA lista megújult.'))
+        self.StatRefresh('Frissítés KÉSZ!')
 
     def StatRefresh(self, what):
-        with open('/tmp/status', 'w') as f:
-            f.write(what)
+        try:
+            with open('/tmp/status', 'w') as f: f.write(decode_str(what))
+        except: pass
 
     def Exit(self):
         if os.path.exists('/tmp/status'): os.system('rm -f /tmp/status')
         self.close()
 
 class InstallWin(Screen):
-    skin = """
-        <screen title="Frissítés" position="center,center" size="600,160" backgroundColor="#20000000" flags="wfNoBorder">
-            <eLabel position="0,0" size="600,160" zPosition="-1" backgroundColor="#20101010" />
-            <widget name="status_text" position="20,20" size="560,120" font="Regular;28" halign="center" valign="center" transparent="1" foregroundColor="#ffffff" />
-        </screen>"""
-
+    skin = """<screen title="Frissítés" position="center,center" size="600,160" flags="wfNoBorder"><widget name="status_text" position="20,20" size="560,120" font="Regular;28" halign="center" valign="center" /></screen>"""
     def __init__(self, session):
         Screen.__init__(self, session)
-        self["status_text"] = Label(_("Kapcsolódás..."))
-        self.closeTimer = eTimer()
+        self["status_text"] = Label("Várj...")
         self.monitorTimer = eTimer()
-        self.monitorTimer.callback.append(self.checkStatusFile)
+        try: self.monitorTimer_conn = self.monitorTimer.timeout.connect(self.checkStatusFile)
+        except: self.monitorTimer.callback.append(self.checkStatusFile)
         self.monitorTimer.start(500, False)
 
     def checkStatusFile(self):
         if os.path.exists('/tmp/status'):
             try:
                 with open('/tmp/status', 'r') as f:
-                    szoveg = f.read().strip()
-                    self["status_text"].setText(szoveg)
-                    if "KÉSZ" in szoveg.upper() or "HIBA" in szoveg.upper():
+                    txt = f.read().strip()
+                    self["status_text"].setText(txt)
+                    if "KÉSZ" in txt.upper() or "HIBA" in txt.upper():
                         self.monitorTimer.stop()
-                        self.closeTimer.callback.append(self.close)
-                        self.closeTimer.start(5000, True)
+                        self.closeTimer = eTimer()
+                        try: self.closeTimer_conn = self.closeTimer.timeout.connect(self.close)
+                        except: self.closeTimer.callback.append(self.close)
+                        self.closeTimer.start(3000, True)
             except: pass
 
-def main(session, **kwargs):
-    session.open(ListManager)
-
-def Plugins(**kwargs):
-    desc = 'Csatornalista Frissítő v' + pluginVersion
-    return [PluginDescriptor(
-        name='Csatornalista Frissítő', 
-        description=desc, 
-        where=PluginDescriptor.WHERE_PLUGINMENU, 
-        icon='plugin.png', 
-        fnc=main
-    )]
+def main(session, **kwargs): session.open(ListManager)
+def Plugins(**kwargs): return [PluginDescriptor(name='Csatornalista Frissítő', where=PluginDescriptor.WHERE_PLUGINMENU, icon='plugin.png', fnc=main)]
