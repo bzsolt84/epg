@@ -20,7 +20,7 @@ if sys.version_info[0] < 3:
 else:
     import urllib.request as urllib
 
-pluginVersion = '2.6.1.22'
+pluginVersion = '2.6.2.16 hybrid'
 pluginPath = resolveFilename(SCOPE_PLUGINS, 'Extensions/eXistenZUpdater')
 marker = '0'
 
@@ -141,7 +141,7 @@ class ListManager(Screen):
         self.StatRefresh('Plugin frissítése...')
         if download_internal('https://raw.githubusercontent.com/bzsolt84/epg/main/plugin.py', pluginPath + '/plugin.py'):
             os.system("sync")
-            self.StatRefresh('KÉSZ!\nRestart GUI!')
+            self.StatRefresh('KÉSZ!\nIndíts újra a kezelöfelületet (GUI)!')
         else: self.StatRefresh('HIBA!\nFrissítés sikertelen!')
 
     def installing_settings(self):
@@ -191,4 +191,4 @@ class InstallWin(Screen):
             except: pass
 
 def main(session, **kwargs): session.open(ListManager)
-def Plugins(**kwargs): return [PluginDescriptor(name='Csatornalista Frissítő', where=PluginDescriptor.WHERE_PLUGINMENU, icon='plugin.png', fnc=main)]
+def Plugins(**kwargs): return [PluginDescriptor(name='Csatornalista Frissítő', description='Csatornalista Frissítő v' + pluginVersion, where=PluginDescriptor.WHERE_PLUGINMENU, icon='plugin.png', fnc=main)]
